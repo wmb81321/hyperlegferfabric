@@ -1,0 +1,132 @@
+
+
+usuario GCP: wmb81321
+    VM:hyperledgerfabric
+
+*** INSTALAR RED UNIVERSITARIADESDE**
+
+
+***** Borrar instalaciones previas
+**Llamar la red anterior y darle de baja
+cd ~/fabric-samples/test-network
+    ./network.sh down
+
+**regresar a ruta origen para instalar repo propio**
+cd 
+git clone https://gitlab.com/wmb81321/hyperledger.git
+
+cd ~/hyperledger/universidades
+
+    ****Sirtve para editar Json**
+    sudo apt install jq
+
+    **Eliminar todo para empezar y que no haya sesgos
+    ***parar todos los dockers que haya en el servidor**
+    docker stop $(docker ps -a -q)
+
+    **Eliminar todos los dockers que haya en el servidor**
+    *** Borrar todos los volumenes previos en el equipo***
+    docker volume prune
+    
+    ***Borrar todas las network previas y todas las certificaciones previas en el servidor**
+    docker network prune
+
+    ** Eliminar TODOS los certificados de los peer y de los orderes / configuracion de los canales para crear canales con el orderer - luego crea carpeta para dar la configuracion***
+    rm -rf organizations/peerOrganizations
+    rm -rf organizations/ordererOrganizations
+    rm -rf channel-artifacts/
+    mkdir channel-artifacts
+
+
+*** LEVANTAMIENTO DE RED DESDE 0 *******
+
+    *** Exportacion de los binarios
+    export PATH=${PWD}/../bin:${PWD}:$PATH
+    export FABRIC_CFG_PATH=${PWD}/../config
+    **para revisar**
+    ls ../bin/
+
+    ****PRIMERO SE CREAR LOS CA para cada una de las universidades *****
+
+    **Crear certificados para cada una de las organizaciones/universidades //AQUI CAMBIAR NOMBRES
+    cryptogen generate --config=./organizations/cryptogen/crypto-config-icesi.yaml --output="organizations"
+    cryptogen generate --config=./organizations/cryptogen/crypto-config-uao.yaml --output="organizations"
+    cryptogen generate --config=./organizations/cryptogen/crypto-config-orderer.yaml --output="organizations"
+
+
+    **** Para ver los certificados de los nodos pares***
+    ls organizations
+    ls organizations/ordererOrganizations/
+    ls organizations/ordererOranizations/universidades.com/
+    ls organizations/ordererOranizations/universidades.com/orderers/
+
+
+    docker-compose -f docker/docker-compose-universidades.yaml up -d
+
+    **ya tenemos arracanda la red con 1 orderer, 2 orgs y 2 couchdbs
+    **habrá que crear los canales
+
+    ***** LUEGO SE CREA LA CONFIGURACIÓN DEL CANAL CANAL SOBRE EL CUAL SE VAN A COMUNICAR****
+
+    **Exportar carpeta llamada configtx = donde esta toda la configuracion MSP de las universidades y configuracion de canales que se pueden crear en al Red***
+    export FABRIC_CFG_PATH=${PWD}/configtx
+
+    **para saber como es esa configuracion, vamos al arhcivo: configtx.yaml --
+        vi configtx/configtx.yaml
+        :q ***para salir***
+
+
+    *** TERCERO, SE GENERA UN BLOQUE GENESIS DEL CANAL CON LOS CA DE LAS UNIVERSIDADES****
+
+    ***Generar el bloque genesis del canal EN LA CARPETA Channel-Artifcats***
+        configtxgen -profile UniversidadesGenesis -outputBlock ./channel-artifacts/universidadeschannel.block -channelID universidadeschannel
+        ***Para verificiar la creacion:
+            ls channel-artifacts/
+
+    ***Luego de haber creado el genensis, se cambiar el canal de la carpeta  config tx -> config
+    export FABRIC_CFG_PATH=${PWD}/../config
+
+    *****CUARTO CONVERTIRSE EN ADMIN DEL ORDERER Y CREAR CANAL DESDE EL ORDERER****
+
+    ***Exportar variables que convierten en Admin del orderer**
+    export ORDERER_CA=${PWD}/organizations/ordererOrganizations/universidades.com/orderers/orderer.universidades.com/msp/tlscacerts/tlsca.universidades.com-cert.pem
+    export ORDERER_ADMIN_TLS_SIGN_CERT=${PWD}/organizations/ordererOrganizations/universidades.com/orderers/orderer.universidades.com/tls/server.crt
+    export ORDERER_ADMIN_TLS_PRIVATE_KEY=${PWD}/organizations/ordererOrganizations/universidades.com/orderers/orderer.universidades.com/tls/server.key
+
+    *** Crear canal en el orderer = esta pasando bloque genesis con todos los CA creados // Esta es una herramienta que permite administrar el orderer **
+    osnadmin channel join --channelID universidadeschannel --config-block ./channel-artifacts/universidadeschannel.block -o localhost:7053 --ca-file "$ORDERER_CA" --client-cert "$ORDERER_ADMIN_TLS_SIGN_CERT" --client-key "$ORDERER_ADMIN_TLS_PRIVATE_KEY"
+
+    ***Revisar los canales creados***
+    osnadmin channel list -o localhost:7053 --ca-file "$ORDERER_CA" --client-cert "$ORDERER_ADMIN_TLS_SIGN_CERT" --client-key "$ORDERER_ADMIN_TLS_PRIVATE_KEY"
+
+
+    ****QUINTO, ADHERIR A LOS NODOS A EL CANAL 
+
+    **EXPORTA LOS CERTIFICADOS QUE ACREDITAN COMO LA UNIVERISDAD DE ICESI
+    export CORE_PEER_TLS_ENABLED=true
+    export PEER0_MADRID_CA=${PWD}/organizations/peerOrganizations/icesi.universidades.com/peers/peer0.icesi.universidades.com/tls/ca.crt
+    export CORE_PEER_LOCALMSPID="IcesiMSP"
+    export CORE_PEER_TLS_ROOTCERT_FILE=$PEER0_ICESI_CA
+    export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/icesi.universidades.com/users/Admin@icesi.universidades.com/msp
+    export CORE_PEER_ADDRESS=localhost:7051
+
+    *** Envia la configuracion del bloque al nodo de icesi para adehirrlo al canal*
+    peer channel join -b ./channel-artifacts/universidadeschannel.block
+
+    *EXPORTA LOS CERTIFICADOS QUE ACREDITAN COMO UNIVERSIDAD UAO
+    export PEER0_UAO_CA=${PWD}/organizations/peerOrganizations/uao.universidades.com/peers/peer0.uao.universidades.com/tls/ca.crt
+    export CORE_PEER_LOCALMSPID="UaoMSP"
+    export CORE_PEER_TLS_ROOTCERT_FILE=$PEER0_UAO_CA
+    export CORE_PEER_MSPCONFIGPATH=${PWD}/organizations/peerOrganizations/uao.universidades.com/users/Admin@uao.universidades.com/msp
+    export CORE_PEER_ADDRESS=localhost:9051
+
+    ***Enviar configuracion del bloque genesis al nodo de UAO para adicionarlo al canal***
+    peer channel join -b ./channel-artifacts/universidadeschannel.block
+
+    **** REVISAR DOCKERS Y SUS LOGS
+    docker ps
+    *indica si hay algun docker que esta parado**
+    docker ps -a
+
+    **Revisar los logs***
+    docker logs -f peer0.madrid.universidades.com
