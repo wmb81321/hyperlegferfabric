@@ -1,0 +1,40 @@
+CLASE CONFIGURACIÓN DE ENTORNO
+
+COMPROBAR SI ESTÁ INSTALADO GIT 
+git --version
+
+COMPROBAR SI ESTÁ INSTALADO CURL 
+curl --version 
+
+INSTALAR DOCKER
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo docker run hello-world
+
+sudo groupadd docker
+sudo usermod -aG docker $USER
+logout
+
+
+docker run hello-world
+
+INSTALAR GO 
+sudo apt install golang-go
+go version
+
+INSTALAR NPM
+sudo apt install npm
+
+INSTALAR DOCKER COMPOSE
+sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+docker-compose --version
+
+DESCARGA REPOSITORIO Y BINARIOS
+curl -sSL https://bit.ly/2ysbOFE | bash -s -- 2.3.2 1.5.2
+
+
+COMPROBAR CARPETAS DESCARGADAS
+cd fabric-samples **Ejemplos***
+ls bin ** Carpeta de binarios para proveer certificados**
+
